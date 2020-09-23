@@ -1,0 +1,18 @@
+
+export namespace randomGenerator {
+
+  export function getUniqueCode(_lenght: number) {
+    try {
+      const chars = "0123456789".split("");
+      let result = "";
+      for (let i = 0; i < _lenght; i++) {
+        const x = Math.floor(Math.random() * chars.length);
+        result += chars[x];
+      }
+      return result;
+
+    } catch (_error) {
+      return "error";
+    }
+  }
+}

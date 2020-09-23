@@ -1,0 +1,7 @@
+  Enable Swagger Validation
+  
+  await SwaggerInputValidator.validateSchemma(swaggerSchema, req.method, req.path).then(_success => {
+    next();
+  }).catch(_error => {
+    apiResponse.errorHandler(res, _error);
+  });

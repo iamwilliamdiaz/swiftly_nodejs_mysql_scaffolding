@@ -1,0 +1,320 @@
+pipeline
+	{
+	agent { label 'Linux' }
+	// The options directive is for configuration that applies to the whole job.
+	environment {
+		// update the project name variable with  Project repository name
+		ProjectName = 'swiftly_nodejs_scaffolding'
+	}
+	options {
+			// For example, we'd like to make sure we only keep 10 builds at a time, so
+			// we don't fill up our storage!
+		buildDiscarder(logRotator(numToKeepStr:'5'))
+
+			// And we'd really like to be sure that this build doesn't hang forever, so
+			// let's time it out after an hour.
+		timeout(time: 60, unit: 'MINUTES')
+		}
+    parameters {
+		 choice(
+            choices: 'Yes\nNo',
+            description: 'Upload the build artifacts for VeracodeScan',
+            name: 'Veracode_Scan')
+    }
+	stages {
+		stage('Install') {
+      steps {
+        nodejs(nodeJSInstallationName:'NodeJS12.13.1_npm6') {
+          sh 'echo ${GIT_BRANCH}  '
+          sh ' node --version '
+          sh ' npm --version '
+          sh 'npm config set engine-strict true' // enforce engines
+          sh 'npm install node-gyp' //Remove this  step id node-gyp has been included as the dependency package
+          step([$class: 'GitHubCommitStatusSetter',
+            contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Install npm packages'],
+            statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+            statusResultSource: [$class: 'ConditionalStatusResultSource',
+              results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+          ])
+          sh 'npm install'
+          sh 'npm config set engine-strict false' // Set back to false after npm install
+        }
+      }
+
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Install npm packages'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Install npm packages'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+				}
+		stage('Linting') {
+            steps {	// Specify nodejs version
+						nodejs(nodeJSInstallationName:'NodeJS12.13.1') {
+						step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Linting'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+		                    ])
+						sh 'npm run jenkins-lint'
+						checkstyle canComputeNew: false, defaultEncoding: '', healthy: '', pattern: '**/eslint.xml', unHealthy: ''
+
+						}
+					}
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Linting'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Linting'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+				}
+		stage('CodeCoverage') {
+            steps {	// Specify nodejs version
+						nodejs(nodeJSInstallationName:'NodeJS12.13.1') {
+						step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'CodeCoverage'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+		                    ])
+						// Code Coverage Check .Update the % value  after each iteration
+						sh 'echo "****************************Starting Code-Coverage check *****************************************"	'
+						sh 'npm run coverage'
+						sh 'echo "****************************Code-Coverage check Completed*****************************************"	'
+						publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, keepAll: false, reportDir: 'coverage/lcov-report/', reportFiles: 'index.html', reportName: 'Istanbul Coverage Report', reportTitles: 'Code Coverage'])
+						junit 'reports/junit.xml'
+						}
+					}
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'CodeCoverage'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${JOB_URL}/Istanbul_Coverage_Report'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'CodeCoverage'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+				}
+		stage('SonarQube Analysis') {
+            when { not { branch 'develop'} }
+			steps {
+			      withSonarQubeEnv('SonarQube6.5-Linux') {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis '],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+		                    ])
+				      sh ' cd /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/SonarQube_Scanner_3.0.3.778/bin ; export SONAR_SCANNER_OPTS="-Xmx3062m -XX:MaxPermSize=512m -XX:ReservedCodeCacheSize=128m" ; ./sonar-scanner ' +
+						'-Dsonar.sourceEncoding=UTF-8 ' +
+						'-Dsonar.javascript.lcov.reportPaths=${WORKSPACE}/coverage/lcov.info ' +
+						'-Dsonar.sources=${WORKSPACE}/. ' +
+						'-Dsonar.language=js ' +
+						'-Dsonar.projectVersion=${GIT_BRANCH}_${BUILD_ID} ' +
+						'-Dsonar.projectKey=${ProjectName} ' +
+						'-Dsonar.projectName=${ProjectName} ' +
+						'-Dsonar.exclusions=node_modules/**/*,init/**/*,test/**/*,database/**/*,qatests/**/* ' +
+						'-Dsonar.projectBaseDir=${WORKSPACE} '
+					}
+				}
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+			}
+
+		stage('Dev SonarQube Analysis') {
+			when {
+						anyOf { branch 'develop'; branch 'origin/develop' }
+            }
+			steps {
+			      withSonarQubeEnv('SonarQube6.5-Linux') {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis '],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+		                    ])
+				      sh ' cd /var/lib/jenkins/tools/hudson.plugins.sonar.SonarRunnerInstallation/SonarQube_Scanner_3.0.3.778/bin ; export SONAR_SCANNER_OPTS="-Xmx3062m -XX:MaxPermSize=512m -XX:ReservedCodeCacheSize=128m" ; ./sonar-scanner ' +
+						'-Dsonar.sourceEncoding=UTF-8 ' +
+						'-Dsonar.javascript.lcov.reportPaths=${WORKSPACE}/coverage/lcov.info ' +
+						'-Dsonar.sources=${WORKSPACE}/. ' +
+						'-Dsonar.language=js ' +
+						'-Dsonar.projectVersion=${GIT_BRANCH}_${BUILD_ID} ' +
+						'-Dsonar.projectKey=${ProjectName}_${GIT_BRANCH} ' +
+						'-Dsonar.projectName=${ProjectName}_${GIT_BRANCH} ' +
+						'-Dsonar.exclusions=node_modules/**/*,init/**/*,test/**/*,database/**/*,qatests/**/* ' +
+						'-Dsonar.projectBaseDir=${WORKSPACE} '
+					}
+				}
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'SonarQube Analysis'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+			}
+		stage('Quality Gate'){
+
+		      steps {
+			  script {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Quality Gate '],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'In-progress', result: 'PENDING', state: 'PENDING']]]
+		                    ])
+			      sleep 60
+		          timeout(time: 1, unit: 'HOURS') { // Just in case something goes wrong, pipeline will be killed after a timeout
+                    def qg = waitForQualityGate() // Reuse taskId previously collected by withSonarQubeEnv
+					echo ""
+                    if (qg.status != "OK") {
+                     error "Pipeline aborted due to quality gate failure: ${qg.status}"
+							}
+						}
+					}
+				}
+			post {
+                success {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Quality Gate'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Successful', result: 'SUCCESS', state: 'SUCCESS']]]
+		                    ])
+	                    }
+                failure {
+	                step([$class: 'GitHubCommitStatusSetter',
+		                    contextSource: [$class: 'ManuallyEnteredCommitContextSource', context: 'Quality Gate'],
+							statusBackrefSource: [$class: 'ManuallyEnteredBackrefSource', backref: '${BUILD_URL}'],
+		                    statusResultSource: [$class: 'ConditionalStatusResultSource',
+		                    results: [[$class: 'AnyBuildResult', message: 'Failed', result: 'UNSTABLE', state: 'FAILURE']]]
+		                    ])
+	                    }
+                    }
+			}
+		stage('TAR Code') {
+		// Creating a tar to upload to Veracode
+			when {
+					allOf{
+						anyOf { branch 'develop'; branch 'origin/develop' }
+							expression { params.Veracode_Scan == 'Yes' }
+					}
+            }
+            steps {
+						nodejs(nodeJSInstallationName:'NodeJS6.9.1')
+					{
+						sh 'cd ${workspace}'
+						sh 'mkdir tar.gz '
+						sh 'pwd; tar -czvf ./tar.gz/${ProjectName}-$(date +%Y%m%d%H%M%S)-${BUILD_ID}.tgz . --exclude "jenkins" --exclude "tar.gz" --exclude "coverage" --exclude ".scannerwork" --exclude ".git" --exclude "node_modules" --exclude "test" --exclude "reports" --exclude ".nyc_output" '
+					}
+				}
+			}
+		stage('VeracodeScan') {
+			when {
+					allOf{
+						anyOf { branch 'develop'; branch 'origin/develop' }
+							expression { params.Veracode_Scan == 'Yes' }
+					}
+            }
+            steps {
+				withCredentials([usernamePassword(credentialsId: 'veracode', passwordVariable: 'Veracode_p', usernameVariable: 'Veracode_u')]) {
+								veracode applicationName: "${ProjectName}-microservices",
+								criticality: 'VeryHigh',
+								fileNamePattern: '',
+								replacementPattern: '',
+								sandboxName: "CI-${ProjectName}",
+								scanExcludesPattern: '',
+								scanIncludesPattern: "*.js, *.json, *.sh",
+								scanName: "CI-${ProjectName}_${BUILD_NUMBER}",
+								teams: '',
+								timeout: 60,
+								debug: true,
+								uploadExcludesPattern: '',
+								uploadIncludesPattern: "**/${ProjectName}**.tgz",
+								useIDkey: true, vid: 'd5c714ca107040ab7dafc1ddb9809023', vkey: 'bb7f54a8828b05728f40f373ca81c24b83a585d8d15f2a466259982fbcb8907279d980bc1abb13ed2f8c07bbdc1dbaab9b9018178eac07971ec0e83bd94289b4', vpassword: '', vuser: ''
+				}
+
+			}
+		 }
+	}
+
+	post {
+		always{
+			archive '**/tslint.xml'
+    	archive '**/junit.xml'
+			deleteDir()
+		}
+		failure {
+			emailext (
+				subject: "FAILED  Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+				body: """<p>FAILED  Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' : </p>
+					<p>Some one broke the build. Please Check the build log attached for errors  or please check ${BUILD_URL} </p>""",
+				attachLog: true, from: 'Jenkins@universalorlando.com', replyTo: 'donotreply@universalorlando.com', to: 'Abhilash.Eleti@universalorlando.com'
+				)
+			}
+		}
+	}
+
+	// Author: Abhilash-Eleti
+	// Modified by William Diaz - Typescript

@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "target": "es6",
+    "noImplicitAny": true,
+    "diagnostics": true,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "allowSyntheticDefaultImports": true,
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "*": ["node_modules/*", "src/types/*"]
+    },
+    "types": ["jest", "node"]
+  },
+  "include": ["src/**/*", "test/**/*", "reports/accounts.test.unit.specs.ts", "reports/accounts.test.integration.specs.ts"],
+  "exclude": ["node_modules/*", "**/*.spec.ts", "!node_modules/@types"]
+}

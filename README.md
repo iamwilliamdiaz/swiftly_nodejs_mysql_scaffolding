@@ -1,2 +1,2 @@
-# swiftly_nodejs_mysql_scaffolding
-NodeJs Typescript Basic Project with mysql integration
+# swiftly_nodejs_scaffolding
+NodeJs Typescript Project with Integration/Unit Test
